@@ -11,6 +11,7 @@ pub fn build(b: *std.Build) void {
         .root_module = .{
             .target = target,
             .optimize = optimize,
+            .pic = if (linkage == .dynamic) true else null,
         },
         .name = "rmw_cyclonedds_cpp",
         .kind = .lib,
@@ -55,6 +56,7 @@ pub fn build(b: *std.Build) void {
         .linkage = linkage,
     });
     lib.linkLibrary(rmw_dds_common_dep.artifact("rmw_dds_common"));
+    lib.linkLibrary(rmw_dds_common_dep.artifact("rmw_dds_common__rosidl_typesupport_cpp"));
     lib.addIncludePath(rmw_dds_common_dep.namedWriteFiles("rmw_dds_common__rosidl_generator_cpp").getDirectory());
 
     const rosidl_dep = b.dependency("rosidl", .{
@@ -85,8 +87,18 @@ pub fn build(b: *std.Build) void {
             "src/TypeSupport2.cpp",
             "src/TypeSupport.cpp",
         },
-        .flags = &.{ "-Wno-deprecated-declarations", "--std=c++17" },
+        .flags = &.{
+            "-Wno-deprecated-declarations",
+            "--std=c++17",
+            // "-P",
+            "-fvisibility=hidden",
+            "-fvisibility-inlines-hidden",
+            "-fno-sanitize=alignment", // TODO needed because the desserialization does a pointer cast on a byte array to extract larger integers, which is technically missaligned pointer access and should be implemented differently
+        }, // TODO remove -P and sanatize trap
     });
+
+    // left in to document, this call isn't right but there's something similar
+    // lib.root.sanatize_c = true;
 
     b.installArtifact(lib);
 }
